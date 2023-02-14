@@ -7,6 +7,7 @@ from datetime import datetime
 
 DEFAULT_SETTINGS = {
 	'folder': 'WWB',
+	'ignoreList': ['.git', '.idea', '.eslintrc.js', '.prettierrc.json'],
 	'db': {
 		'host': 'localhost',
 		'user': 'mysql',
@@ -16,10 +17,13 @@ DEFAULT_SETTINGS = {
 }
 ALLOW_EXTS = ['txt', 'xml', 'js', 'css']
 
-def _getSettings():
+wwbSettings = None
+
+def _initSettings():
 	activeWindow = sublime.active_window()
 	variables = activeWindow.extract_variables()
 	projectPath = variables.get('project_path')
+	global wwbSettings
 	wwbSettings = activeWindow.project_data().get('wwb')
 	if (not wwbSettings):
 		wwbSettings = DEFAULT_SETTINGS
@@ -29,10 +33,21 @@ def _getSettings():
 		'projectPath': projectPath
 	}
 	wwbSettings.update(dictTmp)	
+
+def _getSettings():
 	return wwbSettings
 
+def _isFileIgnore(fullFilePath):	
+	wwbSettings = _getSettings()	
+	for partPath in wwbSettings['ignoreList']:		
+		if partPath in fullFilePath:			
+			return True
+	return False
+
 def _isPathFromWWB(fullFilePath):
-	result = False		
+	result = False
+	if _isFileIgnore(fullFilePath):
+		return result
 	filePath = ''
 	fileExt = ''
 	pathParts = os.path.split(fullFilePath)
@@ -51,15 +66,17 @@ def _isPathFromWWB(fullFilePath):
 			result = True		
 	return result
 
-def _isCurrentFileForWWB():
+def _isCurrentFileForWWB():	
 	result = False
 	activeWindow = sublime.active_window()
+	file = activeWindow.extract_variables()['file']
+	if _isFileIgnore(file):
+		return result
 	filePath = activeWindow.extract_variables()['file_path']	
 	fileExt = activeWindow.extract_variables()['file_extension'].lower()
-	
 	wwbSettings = _getSettings()
 	if ((wwbSettings.get('wwbPath') in filePath) and (fileExt in ALLOW_EXTS)):
-		result = True
+		result = True	
 	return result
 
 def _getConnection():
@@ -160,8 +177,10 @@ def _delLocalsByNameMainPart(name):
 		return result
 
 class wwbCompileEventListeners(sublime_plugin.EventListener):
+	def on_init(self, view):
+		_initSettings()
 	def on_post_save(self, view):		
-		wwbSettings = _getSettings()
+		wwbSettings = _getSettings()		
 		if (not wwbSettings.get('projectPath')):
 			print('No project, create a project.')
 			return None
